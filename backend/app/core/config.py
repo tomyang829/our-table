@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Set to True for local development to skip OAuth entirely.
     # All API requests will be authenticated as a seeded dev user.
     # NEVER enable this in production.
-    DEV_BYPASS_AUTH: bool = True
+    DEV_BYPASS_AUTH: bool = False
 
 
 settings = Settings()
