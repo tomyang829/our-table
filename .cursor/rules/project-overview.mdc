@@ -1,0 +1,49 @@
+---
+description: Architecture, DB models, API conventions, and feature map for our-table
+alwaysApply: true
+---
+
+# our-table — Project Overview
+
+## Architecture
+
+Browser (React + TS) → FastAPI backend → PostgreSQL, recipe-scrapers, Google/GitHub OAuth
+
+- Backend: `backend/app/` — FastAPI, SQLAlchemy async, Alembic, Authlib
+- Frontend: `frontend/src/` — React 18, TypeScript, Vite, TanStack Query, Tailwind, shadcn/ui
+- Local infra: `docker-compose.yml` (Postgres on 5432), `docker-compose.test.yml` (test DB on 5433)
+
+## DB Models
+
+| Model | Key Columns |
+|---|---|
+| `users` | id, email, name, avatar_url, oauth_provider, oauth_sub, flavor_profile (JSONB), created_at |
+| `source_recipes` | id, url (unique), title, description, ingredients (JSONB), instructions (JSONB), image_url, extracted_at |
+| `user_recipes` | id, user_id (FK), source_recipe_id (FK), title, ingredients (JSONB), instructions (JSONB), notes, created_at, updated_at |
+| `recipe_shares` | id, user_recipe_id (FK), slug (unique), created_at |
+
+`source_recipes` stores original scraped content; user edits live only in `user_recipes`.
+
+## Key API Endpoints
+
+- `POST /api/recipes/extract` — scrape URL; return source_recipe + duplicate detection
+- `POST /api/recipes/source/{id}/save` — create user_recipes copy
+- `GET /api/recipes/mine` — list user's saved recipes
+- `GET/PUT /api/recipes/mine/{id}` — fetch / update a user recipe
+- `POST /api/recipes/mine/{id}/share` — generate public share slug (P2)
+- `GET /api/shared/{slug}` — public share page (P2)
+- `GET /api/auth/google|github`, `GET /api/auth/callback/{provider}` — OAuth flow
+- `GET /api/users/me`, `PUT /api/users/me/flavor-profile` — user profile
+
+## Feature Priorities
+
+- **P0**: URL extraction, save/edit recipe, title/ingredients/instructions/notes editable, original preserved
+- **P1**: Duplicate detection (409 on re-save same URL, override allowed)
+- **P2**: Public share links, flavor profile
+
+## Conventions
+
+- All routes are prefixed `/api/`
+- Auth: JWT stored in cookie via `js-cookie`; backend validates on every protected route
+- Error responses: `{"detail": "..."}` (FastAPI default)
+- Tests are written alongside every feature — never after

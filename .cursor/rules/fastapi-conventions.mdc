@@ -1,0 +1,73 @@
+---
+description: FastAPI, SQLAlchemy async, Pydantic, and service/route/model patterns for the backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# FastAPI Conventions
+
+## Async SQLAlchemy
+
+Always use `async` sessions. Never use sync `Session` in route handlers.
+
+```python
+# ✅ GOOD
+async def get_recipe(recipe_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserRecipe).where(UserRecipe.id == recipe_id))
+    return result.scalar_one_or_none()
+
+# ❌ BAD — sync session in async context
+def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    return db.query(UserRecipe).get(recipe_id)
+```
+
+## Layer Separation
+
+- `models/` — SQLAlchemy ORM models only; no business logic
+- `schemas/` — Pydantic request/response models; one `Request` and one `Response` schema per resource
+- `services/` — business logic (e.g., `extractor.py`); imported by routes, never import routes
+- `api/` — thin route handlers; delegate to services, return schemas
+
+## Pydantic Schemas
+
+```python
+# schemas/recipes.py
+class UserRecipeUpdate(BaseModel):
+    title: str | None = None
+    ingredients: list[dict] | None = None
+    instructions: list[str] | None = None
+    notes: str | None = None
+
+class UserRecipeResponse(BaseModel):
+    id: int
+    title: str
+    model_config = ConfigDict(from_attributes=True)
+```
+
+## Error Responses
+
+Use `HTTPException` with descriptive `detail` strings:
+
+```python
+raise HTTPException(status_code=404, detail="Recipe not found")
+raise HTTPException(status_code=409, detail="You have already saved this recipe")
+```
+
+## Route File Structure
+
+```python
+router = APIRouter(prefix="/recipes", tags=["recipes"])
+
+@router.post("/extract", response_model=ExtractResponse)
+async def extract_recipe(body: ExtractRequest, db: AsyncSession = Depends(get_db), ...):
+    ...
+```
+
+## Auth Dependency
+
+Protected routes receive the current user via a dependency:
+
+```python
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
+    ...
+```

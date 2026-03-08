@@ -1,0 +1,83 @@
+---
+description: React component structure, React Query hooks, msw mocks, and co-located test patterns
+globs: frontend/**/*.tsx
+alwaysApply: false
+---
+
+# React Conventions
+
+## Component Structure
+
+Use functional components with named exports. Keep pages in `src/pages/`, shared UI in `src/components/`.
+
+```tsx
+// ✅ GOOD — named export, typed props
+export function RecipeCard({ recipe }: { recipe: UserRecipe }) {
+  return <div className="...">{recipe.title}</div>;
+}
+```
+
+## Data Fetching — React Query
+
+Define custom hooks in `src/hooks/`. Use typed wrappers from `src/api/`.
+
+```tsx
+// src/hooks/useRecipes.ts
+export function useMyRecipes() {
+  return useQuery({
+    queryKey: ['recipes', 'mine'],
+    queryFn: () => api.get<UserRecipe[]>('/api/recipes/mine'),
+  });
+}
+
+// src/hooks/useSaveRecipe.ts
+export function useSaveRecipe() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sourceId: number) => api.post(`/api/recipes/source/${sourceId}/save`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recipes', 'mine'] }),
+  });
+}
+```
+
+## API Client
+
+Typed fetch wrappers live in `src/api/`. Always include auth token from cookie.
+
+```tsx
+// src/api/index.ts
+export const api = {
+  get: <T>(path: string) => fetch(path, { headers: authHeaders() }).then(r => r.json() as Promise<T>),
+  post: <T>(path: string, body?: unknown) => fetch(path, { method: 'POST', body: JSON.stringify(body), headers: authHeaders() }).then(r => r.json() as Promise<T>),
+};
+```
+
+## Loading / Error States
+
+Every page must handle loading and error states explicitly:
+
+```tsx
+const { data, isLoading, isError } = useMyRecipes();
+if (isLoading) return <Spinner />;
+if (isError) return <ErrorMessage />;
+```
+
+## msw Mocks
+
+Handlers live in `src/mocks/handlers.ts` and are shared between tests and optional dev mode.
+
+```tsx
+// src/mocks/handlers.ts
+export const handlers = [
+  http.get('/api/recipes/mine', () => HttpResponse.json([mockRecipe])),
+];
+```
+
+## Co-located Tests
+
+Test files sit next to the component they test:
+
+```
+RecipeDetail.tsx
+RecipeDetail.test.tsx   ← same directory
+```
