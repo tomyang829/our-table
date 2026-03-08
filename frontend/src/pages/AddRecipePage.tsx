@@ -156,10 +156,12 @@ export function AddRecipePage() {
           )}
 
           <div className="rounded-lg border p-4">
-            <h2 className="text-lg font-semibold">{extractedData.source_recipe.title}</h2>
-            {extractedData.source_recipe.description && (
+            <h2 className="text-lg font-semibold">
+              {extractedData.source_recipe.title || 'Untitled recipe'}
+            </h2>
+            {(extractedData.source_recipe.description || (extractedData.partial_parse && extractedData.source_recipe.url)) && (
               <p className="mt-1 text-sm text-muted-foreground">
-                {extractedData.source_recipe.description}
+                {extractedData.source_recipe.description || extractedData.source_recipe.url}
               </p>
             )}
             {!extractedData.partial_parse && (

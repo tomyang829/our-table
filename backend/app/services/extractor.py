@@ -3,7 +3,11 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 from recipe_scrapers import scrape_html
-from recipe_scrapers._exceptions import NoSchemaFoundInWildMode
+from recipe_scrapers._exceptions import (
+    NoSchemaFoundInWildMode,
+    RecipeSchemaNotFound,
+    WebsiteNotImplementedError,
+)
 
 # Matches the start of a numbered step like "1. " or "1) " that is NOT preceded
 # by another digit (to avoid splitting "3.5 cups" or "step 1.2").
@@ -39,15 +43,16 @@ def _normalise_list(items: list[str]) -> list[str]:
     return result
 
 
-def _html_fallback(html: str) -> dict:
+def _html_fallback(html: str, url: str = "") -> dict:
     """Best-effort metadata extraction for pages without schema.org recipe markup.
 
     Pulls the page title and og:image so the user can at least save the URL and
     fill in ingredients/instructions manually rather than hitting a hard 422.
+    Uses url as last-resort title when the page has no parseable title (e.g. JS-only).
     """
     soup = BeautifulSoup(html, "html.parser")
 
-    # Title: og:title > <h1> > <title>
+    # Title: og:title > <h1> > <title> > url
     title: str | None = None
     og_title = soup.find("meta", property="og:title")
     if og_title and og_title.get("content"):
@@ -60,6 +65,8 @@ def _html_fallback(html: str) -> dict:
         title_tag = soup.find("title")
         if title_tag:
             title = title_tag.get_text(strip=True) or None
+    if not title and url:
+        title = url
 
     # Description: og:description > meta description
     description: str | None = None
@@ -88,6 +95,7 @@ def _html_fallback(html: str) -> dict:
 
 
 # Full browser-like headers to avoid 403s from sites that check request headers.
+# Use only gzip/deflate so the response is decompressed (httpx doesn't decompress br without brotli).
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -96,7 +104,7 @@ _BROWSER_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Encoding": "gzip, deflate",
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
     "Sec-Fetch-Dest": "document",
@@ -107,23 +115,35 @@ _BROWSER_HEADERS = {
 }
 
 
+def _scrape_with_scraper(html: str, url: str):
+    """Try site-specific scraper first, then schema.org wild mode. Returns scraper or None."""
+    try:
+        return scrape_html(html, org_url=url, supported_only=True)
+    except WebsiteNotImplementedError:
+        try:
+            return scrape_html(html, org_url=url, supported_only=False)
+        except (NoSchemaFoundInWildMode, RecipeSchemaNotFound):
+            return None
+    except (NoSchemaFoundInWildMode, RecipeSchemaNotFound):
+        return None
+
+
 async def fetch_and_scrape(url: str) -> dict:
     """Fetch a URL and extract recipe data using recipe-scrapers.
 
-    Uses supported_only=False so that any site with schema.org markup is
-    attempted via generic parsing, not just the hand-coded site scrapers.
-
-    When no schema markup is found, falls back to basic HTML metadata extraction
-    so the user can still save the URL and fill in recipe details manually.
+    Tries in order:
+    1. Site-specific scrapers (e.g. Half Baked Harvest, 500+ supported sites).
+    2. Schema.org Recipe markup (wild mode) for any site with JSON-LD.
+    3. Basic HTML metadata (title, description, image) so the user can save the URL
+       and fill in ingredients/instructions manually.
     """
     async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
         response = await client.get(url, headers=_BROWSER_HEADERS)
         response.raise_for_status()
 
-    try:
-        scraper = scrape_html(response.text, org_url=url, supported_only=False)
-    except NoSchemaFoundInWildMode:
-        return _html_fallback(response.text)
+    scraper = _scrape_with_scraper(response.text, url)
+    if scraper is None:
+        return _html_fallback(response.text, url)
 
     ingredients = _normalise_list(_safe(scraper.ingredients) or [])
     instructions = _normalise_list(_safe(scraper.instructions_list) or [])

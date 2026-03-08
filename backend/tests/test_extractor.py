@@ -112,6 +112,45 @@ async def test_fetch_and_scrape_splits_numbered_inline_instructions():
 
 
 @respx.mock
+async def test_fetch_and_scrape_fallback_when_no_recipe_schema():
+    """When the page has no schema.org Recipe (e.g. Sally's Baking Addiction), use HTML fallback."""
+    html_no_schema = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta property="og:title" content="Rosemary Garlic Pull Apart Bread" />
+      <meta property="og:description" content="Flaky and flavorful pull apart bread." />
+      <meta property="og:image" content="https://example.com/bread.jpg" />
+    </head>
+    <body><h1>Rosemary Garlic Pull Apart Bread</h1></body>
+    </html>
+    """
+    respx.get(TEST_URL).mock(return_value=httpx.Response(200, text=html_no_schema))
+
+    # recipe-scrapers raises RecipeSchemaNotFound when no Recipe schema is present
+    result = await fetch_and_scrape(TEST_URL)
+
+    assert result["title"] == "Rosemary Garlic Pull Apart Bread"
+    assert result["description"] == "Flaky and flavorful pull apart bread."
+    assert result["image_url"] == "https://example.com/bread.jpg"
+    assert result["ingredients"] == []
+    assert result["instructions"] == []
+
+
+@respx.mock
+async def test_fetch_and_scrape_fallback_uses_url_when_no_meta():
+    """When the page has no parseable title (e.g. JS-only), use URL as title."""
+    html_js_only = "<!DOCTYPE html><html><body><div id='root'></div></body></html>"
+    respx.get(TEST_URL).mock(return_value=httpx.Response(200, text=html_js_only))
+
+    result = await fetch_and_scrape(TEST_URL)
+
+    assert result["title"] == TEST_URL
+    assert result["ingredients"] == []
+    assert result["instructions"] == []
+
+
+@respx.mock
 async def test_fetch_and_scrape_handles_missing_optional_fields():
     minimal_html = """
     <!DOCTYPE html>

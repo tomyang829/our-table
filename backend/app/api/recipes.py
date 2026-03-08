@@ -64,8 +64,8 @@ async def extract_recipe(
     result = await db.execute(select(SourceRecipe).where(SourceRecipe.url == url))
     source = result.scalar_one_or_none()
 
-    if source is None:
-        # Scrape and create new source_recipe
+    # Re-scrape when missing (new URL) or when we have no title (e.g. previous fallback failed)
+    if source is None or not source.title:
         try:
             data = await fetch_and_scrape(url)
         except httpx.HTTPStatusError as exc:
@@ -84,8 +84,16 @@ async def extract_recipe(
                 detail=f"Could not extract recipe from URL: {exc}",
             )
 
-        source = SourceRecipe(url=url, **data)
-        db.add(source)
+        if source is None:
+            source = SourceRecipe(url=url, **data)
+            db.add(source)
+        else:
+            source.title = data.get("title")
+            source.description = data.get("description")
+            source.ingredients = data.get("ingredients")
+            source.instructions = data.get("instructions")
+            source.image_url = data.get("image_url")
+            source.servings = data.get("servings")
         await db.flush()
         await db.commit()
 
