@@ -22,3 +22,29 @@ class SourceRecipeResponse(BaseModel):
 
 class ExtractResponse(BaseModel):
     source_recipe: SourceRecipeResponse
+
+
+class UserRecipeSaveRequest(BaseModel):
+    notes: str | None = None
+
+
+class UserRecipeUpdate(BaseModel):
+    title: str | None = None
+    ingredients: list | None = None
+    instructions: list | None = None
+    notes: str | None = None
+
+
+class UserRecipeResponse(BaseModel):
+    id: int
+    user_id: int
+    source_recipe_id: int
+    title: str | None
+    ingredients: list | None
+    instructions: list | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+    source_recipe: SourceRecipeResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)

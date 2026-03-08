@@ -5,6 +5,7 @@ import respx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.source_recipe import SourceRecipe
+from app.models.user import User
 from app.models.user_recipe import UserRecipe
 
 RECIPE_HTML = """
@@ -126,3 +127,387 @@ async def test_extract_bad_url_returns_422(authed_client):
 
     assert response.status_code == 422
     assert "Failed to fetch URL" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/recipes/source/{source_id}/save
+# ---------------------------------------------------------------------------
+
+
+async def test_save_creates_user_recipe(authed_client, db_session: AsyncSession):
+    """Saving a source recipe creates a user_recipe copy and returns 201."""
+    client, test_user = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Original Carbonara",
+        ingredients=["200g spaghetti", "100g pancetta"],
+        instructions=["Cook pasta.", "Mix eggs."],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    response = await client.post(f"/api/recipes/source/{source.id}/save")
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Original Carbonara"
+    assert data["user_id"] == test_user.id
+    assert data["source_recipe_id"] == source.id
+    assert data["ingredients"] == ["200g spaghetti", "100g pancetta"]
+    assert data["source_recipe"]["url"] == RECIPE_URL
+
+
+async def test_save_with_notes(authed_client, db_session: AsyncSession):
+    """Optional notes are stored on the user_recipe."""
+    client, _ = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    response = await client.post(
+        f"/api/recipes/source/{source.id}/save",
+        json={"notes": "Add more pepper"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["notes"] == "Add more pepper"
+
+
+async def test_save_nonexistent_source_returns_404(authed_client):
+    """Trying to save a source_recipe that does not exist returns 404."""
+    client, _ = authed_client
+
+    response = await client.post("/api/recipes/source/99999/save")
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+async def test_save_requires_auth(client):
+    """Unauthenticated save requests are rejected with 401."""
+    response = await client.post("/api/recipes/source/1/save")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /api/recipes/mine
+# ---------------------------------------------------------------------------
+
+
+async def test_list_returns_users_recipes(authed_client, db_session: AsyncSession):
+    """GET /mine returns only the current user's saved recipes."""
+    client, test_user = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    recipe1 = UserRecipe(
+        user_id=test_user.id,
+        source_recipe_id=source.id,
+        title="My Carbonara",
+    )
+    recipe2 = UserRecipe(
+        user_id=test_user.id,
+        source_recipe_id=source.id,
+        title="My Second Carbonara",
+    )
+    db_session.add_all([recipe1, recipe2])
+    await db_session.flush()
+
+    response = await client.get("/api/recipes/mine")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    titles = {r["title"] for r in data}
+    assert titles == {"My Carbonara", "My Second Carbonara"}
+
+
+async def test_list_excludes_other_users_recipes(authed_client, db_session: AsyncSession):
+    """Recipes belonging to another user are not returned."""
+    client, test_user = authed_client
+
+    other_user = User(
+        email="other@example.com",
+        name="Other User",
+        oauth_provider="google",
+        oauth_sub="google_sub_other_456",
+    )
+    db_session.add(other_user)
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    own = UserRecipe(user_id=test_user.id, source_recipe_id=source.id, title="Mine")
+    others = UserRecipe(user_id=other_user.id, source_recipe_id=source.id, title="Theirs")
+    db_session.add_all([own, others])
+    await db_session.flush()
+
+    response = await client.get("/api/recipes/mine")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "Mine"
+
+
+async def test_list_empty_returns_empty_array(authed_client):
+    """When the user has no recipes, an empty list is returned."""
+    client, _ = authed_client
+
+    response = await client.get("/api/recipes/mine")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_list_requires_auth(client):
+    """Unauthenticated list requests are rejected with 401."""
+    response = await client.get("/api/recipes/mine")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /api/recipes/mine/{id}
+# ---------------------------------------------------------------------------
+
+
+async def test_get_detail_returns_recipe_with_source(authed_client, db_session: AsyncSession):
+    """GET /mine/{id} returns the user recipe along with the original source_recipe."""
+    client, test_user = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Original Carbonara",
+        ingredients=["200g spaghetti"],
+        instructions=["Cook pasta."],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    recipe = UserRecipe(
+        user_id=test_user.id,
+        source_recipe_id=source.id,
+        title="My Carbonara",
+        notes="Less salt",
+    )
+    db_session.add(recipe)
+    await db_session.flush()
+
+    response = await client.get(f"/api/recipes/mine/{recipe.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == recipe.id
+    assert data["title"] == "My Carbonara"
+    assert data["notes"] == "Less salt"
+    assert data["source_recipe"] is not None
+    assert data["source_recipe"]["url"] == RECIPE_URL
+    assert data["source_recipe"]["title"] == "Original Carbonara"
+
+
+async def test_get_detail_not_found_returns_404(authed_client):
+    """Requesting a recipe that does not exist returns 404."""
+    client, _ = authed_client
+
+    response = await client.get("/api/recipes/mine/99999")
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+async def test_get_detail_other_users_recipe_returns_404(authed_client, db_session: AsyncSession):
+    """A user cannot access another user's recipe — 404 (not 403) to avoid enumeration."""
+    client, _ = authed_client
+
+    other_user = User(
+        email="other@example.com",
+        name="Other User",
+        oauth_provider="github",
+        oauth_sub="github_sub_789",
+    )
+    db_session.add(other_user)
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    other_recipe = UserRecipe(
+        user_id=other_user.id,
+        source_recipe_id=source.id,
+        title="Their Recipe",
+    )
+    db_session.add(other_recipe)
+    await db_session.flush()
+
+    response = await client.get(f"/api/recipes/mine/{other_recipe.id}")
+
+    assert response.status_code == 404
+
+
+async def test_get_detail_requires_auth(client):
+    """Unauthenticated detail requests are rejected with 401."""
+    response = await client.get("/api/recipes/mine/1")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/recipes/mine/{id}
+# ---------------------------------------------------------------------------
+
+
+async def test_update_patches_fields(authed_client, db_session: AsyncSession):
+    """PUT /mine/{id} updates only the fields provided in the body."""
+    client, test_user = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    recipe = UserRecipe(
+        user_id=test_user.id,
+        source_recipe_id=source.id,
+        title="Original Title",
+        ingredients=["pasta"],
+        instructions=["cook"],
+        notes=None,
+    )
+    db_session.add(recipe)
+    await db_session.flush()
+
+    response = await client.put(
+        f"/api/recipes/mine/{recipe.id}",
+        json={"title": "Updated Title", "notes": "My note"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Updated Title"
+    assert data["notes"] == "My note"
+    assert data["ingredients"] == ["pasta"]
+
+
+async def test_update_all_editable_fields(authed_client, db_session: AsyncSession):
+    """All four editable fields can be updated in one request."""
+    client, test_user = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    recipe = UserRecipe(
+        user_id=test_user.id,
+        source_recipe_id=source.id,
+        title="Old Title",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(recipe)
+    await db_session.flush()
+
+    response = await client.put(
+        f"/api/recipes/mine/{recipe.id}",
+        json={
+            "title": "New Title",
+            "ingredients": ["egg", "bacon"],
+            "instructions": ["step 1", "step 2"],
+            "notes": "Serve hot",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "New Title"
+    assert data["ingredients"] == ["egg", "bacon"]
+    assert data["instructions"] == ["step 1", "step 2"]
+    assert data["notes"] == "Serve hot"
+
+
+async def test_update_not_found_returns_404(authed_client):
+    """Updating a non-existent recipe returns 404."""
+    client, _ = authed_client
+
+    response = await client.put(
+        "/api/recipes/mine/99999",
+        json={"title": "Ghost Recipe"},
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+async def test_update_other_users_recipe_returns_404(authed_client, db_session: AsyncSession):
+    """A user cannot update another user's recipe."""
+    client, _ = authed_client
+
+    other_user = User(
+        email="other@example.com",
+        name="Other User",
+        oauth_provider="github",
+        oauth_sub="github_sub_update_test",
+    )
+    db_session.add(other_user)
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    other_recipe = UserRecipe(
+        user_id=other_user.id,
+        source_recipe_id=source.id,
+        title="Their Recipe",
+    )
+    db_session.add(other_recipe)
+    await db_session.flush()
+
+    response = await client.put(
+        f"/api/recipes/mine/{other_recipe.id}",
+        json={"title": "Hijacked"},
+    )
+
+    assert response.status_code == 404
+
+
+async def test_update_requires_auth(client):
+    """Unauthenticated update requests are rejected with 401."""
+    response = await client.put("/api/recipes/mine/1", json={"title": "X"})
+    assert response.status_code == 401
