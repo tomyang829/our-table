@@ -11,10 +11,14 @@ function authHeaders(json = true): Record<string, string> {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }))
-    const err = new Error((body as { detail?: string }).detail ?? res.statusText) as Error & {
-      status: number
-      body: unknown
-    }
+    const detail = (body as { detail?: unknown }).detail
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : typeof detail === 'object' && detail !== null && 'message' in detail
+          ? String((detail as { message: unknown }).message)
+          : res.statusText
+    const err = new Error(message) as Error & { status: number; body: unknown }
     err.status = res.status
     err.body = body
     throw err

@@ -19,6 +19,7 @@ export const mockSourceRecipe: SourceRecipe = {
   ingredients: ['1 cup flour', '2 eggs'],
   instructions: ['Mix ingredients', 'Bake at 350°F'],
   image_url: null,
+  servings: '4 servings',
   extracted_at: '2024-01-01T00:00:00Z',
 }
 
@@ -31,6 +32,7 @@ export const mockUserRecipe: UserRecipe = {
   instructions: ['Mix ingredients', 'Bake at 350°F'],
   notes: null,
   image_url: null,
+  servings: '4 servings',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
   source_recipe: mockSourceRecipe,

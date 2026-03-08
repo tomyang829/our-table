@@ -16,6 +16,7 @@ export interface SourceRecipe {
   ingredients: string[]
   instructions: string[]
   image_url: string | null
+  servings: string | null
   extracted_at: string
 }
 
@@ -28,6 +29,7 @@ export interface UserRecipe {
   instructions: string[]
   notes: string | null
   image_url: string | null
+  servings: string | null
   created_at: string
   updated_at: string
   source_recipe?: SourceRecipe
@@ -45,6 +47,7 @@ export interface ExtractResponse {
   source_recipe: SourceRecipe
   already_saved: boolean
   user_recipe_id?: number
+  partial_parse?: boolean
 }
 
 export interface ApiError {

@@ -57,7 +57,13 @@ describe('AddRecipePage', () => {
     server.use(
       http.post('/api/recipes/extract', () =>
         HttpResponse.json(
-          { detail: 'Already saved', source_recipe_id: mockSourceRecipe.id, user_recipe_id: mockUserRecipe.id },
+          {
+            detail: {
+              message: 'You have already saved this recipe',
+              source_recipe_id: mockSourceRecipe.id,
+              existing_recipe_id: mockUserRecipe.id,
+            },
+          },
           { status: 409 },
         ),
       ),
@@ -98,7 +104,13 @@ describe('AddRecipePage', () => {
     server.use(
       http.post('/api/recipes/extract', () =>
         HttpResponse.json(
-          { detail: 'Already saved', source_recipe_id: mockSourceRecipe.id, user_recipe_id: mockUserRecipe.id },
+          {
+            detail: {
+              message: 'You have already saved this recipe',
+              source_recipe_id: mockSourceRecipe.id,
+              existing_recipe_id: mockUserRecipe.id,
+            },
+          },
           { status: 409 },
         ),
       ),

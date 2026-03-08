@@ -8,6 +8,7 @@ export interface UpdateRecipeInput {
   ingredients?: string[]
   instructions?: string[]
   notes?: string | null
+  servings?: string | null
 }
 
 export function useUpdateRecipe() {

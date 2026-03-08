@@ -6,6 +6,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { AddRecipePage } from '@/pages/AddRecipePage'
 import { RecipeDetailPage } from '@/pages/RecipeDetailPage'
 import { useUser } from '@/hooks/useUser'
+import { TopBanner } from '@/components/TopBanner'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,7 +22,12 @@ function ProtectedRoute() {
   const { isLoading, isError } = useUser()
   if (isLoading) return null
   if (isError) return <Navigate to="/login" replace />
-  return <Outlet />
+  return (
+    <>
+      <TopBanner />
+      <Outlet />
+    </>
+  )
 }
 
 /** Renders children only when NOT authenticated; redirects to /dashboard otherwise. */

@@ -33,11 +33,15 @@ export function AddRecipePage() {
         })
       }
     } catch (err) {
-      const error = err as { status?: number; body?: { source_recipe_id?: number; user_recipe_id?: number } }
-      if (error.status === 409 && error.body?.source_recipe_id !== undefined) {
+      const error = err as {
+        status?: number
+        body?: { detail?: { source_recipe_id?: number; existing_recipe_id?: number } }
+      }
+      const detail = error.body?.detail
+      if (error.status === 409 && detail?.source_recipe_id !== undefined) {
         setConflict({
-          sourceId: error.body.source_recipe_id,
-          userRecipeId: error.body.user_recipe_id,
+          sourceId: detail.source_recipe_id,
+          userRecipeId: detail.existing_recipe_id,
         })
       }
     }
@@ -136,6 +140,21 @@ export function AddRecipePage() {
 
       {extractedData !== null && conflict === null && (
         <div className="mt-6 space-y-4">
+          {extractedData.partial_parse && (
+            <div
+              role="alert"
+              className="rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/40"
+            >
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Couldn't fully parse this page
+              </p>
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                This site doesn't use structured recipe markup, so ingredients and instructions
+                couldn't be extracted automatically. You can still save it and fill them in manually.
+              </p>
+            </div>
+          )}
+
           <div className="rounded-lg border p-4">
             <h2 className="text-lg font-semibold">{extractedData.source_recipe.title}</h2>
             {extractedData.source_recipe.description && (
@@ -143,10 +162,12 @@ export function AddRecipePage() {
                 {extractedData.source_recipe.description}
               </p>
             )}
-            <p className="mt-2 text-sm text-muted-foreground">
-              {extractedData.source_recipe.ingredients.length} ingredient
-              {extractedData.source_recipe.ingredients.length !== 1 ? 's' : ''}
-            </p>
+            {!extractedData.partial_parse && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {extractedData.source_recipe.ingredients.length} ingredient
+                {extractedData.source_recipe.ingredients.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
 
           {saveMutation.isError && (
@@ -159,7 +180,7 @@ export function AddRecipePage() {
             onClick={() => handleSave(extractedData.source_recipe.id)}
             disabled={saveMutation.isPending}
           >
-            {saveMutation.isPending ? 'Saving…' : 'Save Recipe'}
+            {saveMutation.isPending ? 'Saving…' : extractedData.partial_parse ? 'Save & Fill In Manually' : 'Save Recipe'}
           </Button>
         </div>
       )}

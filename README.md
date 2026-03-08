@@ -1,6 +1,6 @@
 # Our Table
 
-A personal recipe manager. Paste a URL from any recipe website, extract the recipe automatically, and save a personal copy you can edit however you like — adjust ingredients, rewrite instructions, add notes — while always keeping a link back to the original.
+A personal recipe manager. Paste a URL from any recipe website, extract the recipe automatically, and save a personal copy you can edit however you like — adjust ingredients, rewrite instructions, add notes, and upload your own photo — while always keeping a link back to the original.
 
 ## Stack
 
@@ -10,14 +10,18 @@ A personal recipe manager. Paste a URL from any recipe website, extract the reci
 | Backend | FastAPI, SQLAlchemy (async), Alembic, Pydantic |
 | Database | PostgreSQL 16 |
 | Auth | Google + GitHub OAuth (Authlib), JWT in httpOnly cookie |
-| Scraping | recipe-scrapers (300+ sites + generic schema.org fallback) |
+| Scraping | recipe-scrapers (300+ sites + generic schema.org fallback) + BeautifulSoup HTML fallback |
 | Testing | pytest + respx (backend), Vitest + Testing Library + msw (frontend) |
 
 ## Features
 
-- **Extract** — paste any recipe URL and pull out title, ingredients, and instructions automatically
+- **Extract** — paste any recipe URL and pull out title, ingredients, instructions, serving size, and thumbnail automatically
 - **Save & edit** — keep your own copy with per-step ingredient and instruction editing; the original is always preserved
-- **Duplicate detection** — warns when you try to save a URL you've already saved
+- **Serving size adjuster** — stepper on the recipe page dynamically scales ingredient quantities (handles fractions, mixed numbers, and Unicode vulgar fractions)
+- **Recipe images** — scraped thumbnails shown on card and detail views; upload your own photo to override
+- **Duplicate detection** — warns when you try to save a URL you've already saved, with options to view the existing copy or save another
+- **Edited / As-is labels** — list view badges show whether a recipe has been modified from the original (changed text, custom image, or adjusted servings)
+- **Partial-parse fallback** — sites without structured recipe markup (e.g. Squarespace blogs) still load with title and image; fill in the details manually
 - **Delete** — remove recipes you no longer need
 - **Compare with original** — view the scraped original alongside your edited version, with a link back to the source
 
@@ -27,7 +31,7 @@ A personal recipe manager. Paste a URL from any recipe website, extract the reci
 our-table/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py            # FastAPI app + router wiring
+│   │   ├── main.py            # FastAPI app + router wiring + static file mount
 │   │   ├── core/              # config, database session, auth helpers
 │   │   ├── models/            # SQLAlchemy ORM models
 │   │   ├── schemas/           # Pydantic request/response schemas
@@ -35,16 +39,19 @@ our-table/
 │   │   └── services/          # Business logic (recipe extractor)
 │   ├── tests/                 # pytest integration + unit tests
 │   ├── alembic/               # DB migrations
+│   ├── uploads/               # User-uploaded recipe images (gitignored)
 │   └── pyproject.toml         # Python deps (managed with uv)
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/             # Route-level components + co-located tests
-│   │   ├── components/        # Shared UI components
-│   │   ├── hooks/             # React Query hooks
-│   │   ├── api/               # Typed fetch wrappers
-│   │   ├── mocks/             # msw handlers shared by tests and dev mode
-│   │   └── types/             # Shared TypeScript types
-│   └── package.json
+│   ├── public/
+│   │   └── logo.png           # App logo served as static asset
+│   └── src/
+│       ├── pages/             # Route-level components + co-located tests
+│       ├── components/        # Shared UI components (TopBanner, etc.)
+│       ├── hooks/             # React Query hooks
+│       ├── api/               # Typed fetch wrappers
+│       ├── mocks/             # msw handlers shared by tests and dev mode
+│       ├── types/             # Shared TypeScript types
+│       └── utils/             # Pure utilities (scaling.ts for ingredient math)
 ├── docker-compose.yml         # Postgres + pgAdmin for local dev
 ├── docker-compose.test.yml    # Isolated test DB (port 5433)
 └── Makefile                   # Convenience commands
@@ -97,6 +104,10 @@ Add `DEV_BYPASS_AUTH=true` to `backend/.env`. All API requests will be automatic
 
 The login page also shows a **"Dev Login (skip OAuth)"** button when running in dev mode that hits `GET /api/auth/dev-login`, sets a real session cookie, and redirects to the app.
 
+### Uploaded images
+
+User-uploaded recipe images are stored under `backend/uploads/recipes/` and served at `/api/uploads/`. This directory is gitignored. The path can be changed via `UPLOAD_DIR` in `backend/.env`.
+
 ## Running tests
 
 ```bash
@@ -109,23 +120,36 @@ Run just the backend or frontend tests independently:
 
 ```bash
 cd backend && uv run pytest             # backend only
-cd frontend && npm run test:run         # frontend only
+cd frontend && npm run test -- --run    # frontend only
 ```
 
 ## Key API endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/recipes/extract` | Scrape a URL; returns source recipe + duplicate flag |
+| `POST` | `/api/recipes/extract` | Scrape a URL; returns source recipe + duplicate flag + `partial_parse` indicator |
 | `POST` | `/api/recipes/source/{id}/save` | Save a personal copy of a source recipe |
-| `GET` | `/api/recipes/mine` | List the current user's saved recipes |
+| `GET` | `/api/recipes/mine` | List the current user's saved recipes (includes `deviates_from_source` flag) |
 | `GET` | `/api/recipes/mine/{id}` | Fetch one recipe (includes original source) |
-| `PUT` | `/api/recipes/mine/{id}` | Update title, ingredients, instructions, notes |
+| `PUT` | `/api/recipes/mine/{id}` | Update title, ingredients, instructions, notes, servings |
 | `DELETE` | `/api/recipes/mine/{id}` | Delete a saved recipe |
+| `POST` | `/api/recipes/mine/{id}/image` | Upload a custom recipe image (JPEG/PNG/WebP, max 5 MB) |
+| `GET` | `/api/uploads/recipes/{filename}` | Serve an uploaded recipe image |
 | `GET` | `/api/users/me` | Current user profile |
 | `GET` | `/api/auth/google` | Initiate Google OAuth flow |
 | `GET` | `/api/auth/github` | Initiate GitHub OAuth flow |
 | `GET` | `/api/auth/dev-login` | Dev-only instant login (requires `DEV_BYPASS_AUTH=true`) |
+
+## DB schema overview
+
+| Table | Notable columns |
+|---|---|
+| `users` | `id`, `email`, `name`, `avatar_url`, `oauth_provider`, `oauth_sub` |
+| `source_recipes` | `id`, `url` (unique), `title`, `ingredients`, `instructions`, `image_url`, `servings`, `extracted_at` |
+| `user_recipes` | `id`, `user_id`, `source_recipe_id`, `title`, `ingredients`, `instructions`, `notes`, `image_url`, `servings`, `created_at`, `updated_at` |
+| `recipe_shares` | `id`, `user_recipe_id`, `slug` (unique) |
+
+`source_recipes` stores the original scraped content and is never modified. All user edits (including custom images and serving size) live only in `user_recipes`.
 
 ## Stopping
 

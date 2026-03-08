@@ -41,6 +41,8 @@ def _deviates_from_source(recipe: UserRecipe) -> bool:
         return True
     if (recipe.instructions or []) != (src.instructions or []):
         return True
+    if (recipe.servings or "") != (src.servings or ""):
+        return True
     return False
 
 
@@ -102,10 +104,15 @@ async def extract_recipe(
             detail={
                 "message": "You have already saved this recipe",
                 "existing_recipe_id": existing.id,
+                "source_recipe_id": source.id,
             },
         )
 
-    return ExtractResponse(source_recipe=SourceRecipeResponse.model_validate(source))
+    partial = not source.ingredients and not source.instructions
+    return ExtractResponse(
+        source_recipe=SourceRecipeResponse.model_validate(source),
+        partial_parse=partial,
+    )
 
 
 @router.post(
@@ -135,6 +142,7 @@ async def save_recipe(
         title=source.title,
         ingredients=source.ingredients,
         instructions=source.instructions,
+        servings=source.servings,
         notes=body.notes if body else None,
     )
     db.add(user_recipe)
@@ -280,6 +288,8 @@ async def update_my_recipe(
         recipe.instructions = body.instructions
     if body.notes is not None:
         recipe.notes = body.notes
+    if body.servings is not None:
+        recipe.servings = body.servings
 
     await db.flush()
     await db.commit()

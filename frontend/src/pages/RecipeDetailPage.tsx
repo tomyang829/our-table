@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useRecipe } from '@/hooks/useRecipes'
 import { useUpdateRecipe } from '@/hooks/useUpdateRecipe'
 import { useUploadRecipeImage } from '@/hooks/useUploadRecipeImage'
 import { useDeleteRecipe } from '@/hooks/useDeleteRecipe'
+import { parseServingCount, scaleIngredient } from '@/utils/scaling'
 
 // Auto-grows to fit its content so long steps don't get clipped.
 function AutoTextarea({
@@ -110,6 +111,30 @@ export function RecipeDetailPage() {
   const [editIngredients, setEditIngredients] = useState<string[]>([])
   const [editInstructions, setEditInstructions] = useState<string[]>([])
   const [editNotes, setEditNotes] = useState('')
+  const [editServings, setEditServings] = useState('')
+
+  // Serving size adjuster state (view mode only; purely client-side scaling)
+  const [currentServings, setCurrentServings] = useState<number | null>(null)
+
+  const baseServings = recipe ? parseServingCount(recipe.servings) : null
+
+  // Reset adjuster whenever the recipe changes (e.g., after a save)
+  useEffect(() => {
+    setCurrentServings(baseServings)
+  }, [baseServings])
+
+  const scalingRatio =
+    baseServings && currentServings && baseServings > 0
+      ? currentServings / baseServings
+      : 1
+
+  const displayedIngredients = useCallback(
+    (ingredients: string[]) =>
+      scalingRatio === 1
+        ? ingredients
+        : ingredients.map((ing) => scaleIngredient(ing, scalingRatio)),
+    [scalingRatio],
+  )
 
   const startEdit = () => {
     if (!recipe) return
@@ -117,6 +142,7 @@ export function RecipeDetailPage() {
     setEditIngredients([...recipe.ingredients])
     setEditInstructions([...recipe.instructions])
     setEditNotes(recipe.notes ?? '')
+    setEditServings(recipe.servings ?? '')
     setIsEditing(true)
   }
 
@@ -144,6 +170,7 @@ export function RecipeDetailPage() {
         ingredients: editIngredients.map((s) => s.trim()).filter(Boolean),
         instructions: editInstructions.map((s) => s.trim()).filter(Boolean),
         notes: editNotes.trim() || null,
+        servings: editServings.trim() || null,
       })
       setIsEditing(false)
     } catch {
@@ -258,6 +285,19 @@ export function RecipeDetailPage() {
           />
 
           <div className="space-y-2">
+            <label htmlFor="servings" className="text-sm font-medium">
+              Servings
+            </label>
+            <input
+              id="servings"
+              value={editServings}
+              onChange={(e) => setEditServings(e.target.value)}
+              placeholder="e.g. 4 servings"
+              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          <div className="space-y-2">
             <label htmlFor="notes" className="text-sm font-medium">
               Notes
             </label>
@@ -358,9 +398,48 @@ export function RecipeDetailPage() {
           )}
 
           <section>
-            <h2 className="mb-2 text-lg font-semibold">Ingredients</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Ingredients</h2>
+              {baseServings !== null && currentServings !== null && (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                  <span className="text-sm text-muted-foreground">Serves</span>
+                  <button
+                    type="button"
+                    aria-label="Decrease servings"
+                    onClick={() => setCurrentServings(Math.max(1, currentServings - 1))}
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                    disabled={currentServings <= 1}
+                  >
+                    −
+                  </button>
+                  <span className="min-w-[2ch] text-center text-sm font-semibold tabular-nums">
+                    {currentServings}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Increase servings"
+                    onClick={() => setCurrentServings(currentServings + 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    +
+                  </button>
+                  {currentServings !== baseServings && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentServings(baseServings)}
+                      className="ml-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                      reset
+                    </button>
+                  )}
+                </div>
+              )}
+              {!baseServings && recipe.servings && (
+                <span className="text-sm text-muted-foreground">{recipe.servings}</span>
+              )}
+            </div>
             <ul className="list-inside list-disc space-y-1">
-              {recipe.ingredients.map((ingredient, i) => (
+              {displayedIngredients(recipe.ingredients).map((ingredient, i) => (
                 <li key={i} className="text-sm">
                   {ingredient}
                 </li>
