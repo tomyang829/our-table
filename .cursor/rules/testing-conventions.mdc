@@ -1,0 +1,114 @@
+---
+description: pytest conftest rollback fixture, respx mocking, msw handlers, and coverage expectations
+globs: **/*test*
+alwaysApply: false
+---
+
+# Testing Conventions
+
+## Backend — pytest
+
+### conftest.py DB Fixture
+
+Each test runs in a transaction that is rolled back after the test — no teardown needed.
+
+```python
+# backend/tests/conftest.py
+@pytest_asyncio.fixture
+async def db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        async with AsyncSession(bind=conn) as session:
+            yield session
+            await session.rollback()
+
+@pytest_asyncio.fixture
+async def client(db):
+    app.dependency_overrides[get_db] = lambda: db
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+```
+
+### respx — Mock Outbound HTTP
+
+Use `respx` to intercept calls made by `recipe-scrapers` / `httpx` so tests never hit real URLs.
+
+```python
+@respx.mock
+async def test_extract(client, respx_mock):
+    respx_mock.get("https://example.com/recipe").mock(return_value=httpx.Response(200, text=MOCK_HTML))
+    response = await client.post("/api/recipes/extract", json={"url": "https://example.com/recipe"})
+    assert response.status_code == 200
+```
+
+### Auth in Tests
+
+Override `get_current_user` dependency to inject a fixed test user:
+
+```python
+app.dependency_overrides[get_current_user] = lambda: test_user
+```
+
+### Coverage Targets
+
+- All API route handlers
+- Extractor service (`services/extractor.py`)
+- Auth middleware / JWT helpers
+- Duplicate detection logic (409 path and override path)
+
+## Frontend — Vitest + Testing Library
+
+### Setup
+
+```tsx
+// src/mocks/server.ts
+import { setupServer } from 'msw/node';
+import { handlers } from './handlers';
+export const server = setupServer(...handlers);
+
+// vitest.setup.ts
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+```
+
+### Page Test Structure
+
+Every page test covers four states:
+
+```tsx
+describe('RecipeDetail', () => {
+  it('renders loading state', () => { ... });
+  it('renders recipe data on success', async () => { ... });
+  it('renders error message on API failure', async () => { ... });
+  it('handles user interaction (e.g. edit save)', async () => { ... });
+});
+```
+
+### 409 Duplicate Detection Test
+
+```tsx
+it('shows override modal on 409', async () => {
+  server.use(http.post('/api/recipes/extract', () => HttpResponse.json({ detail: '...' }, { status: 409 })));
+  // render, submit URL, assert modal appears, click override, assert new request fired
+});
+```
+
+## File Layout
+
+```
+backend/tests/
+├── conftest.py
+├── test_extractor.py
+├── test_recipes.py
+├── test_auth.py
+└── test_users.py
+
+frontend/src/
+├── pages/RecipeDetail/
+│   ├── RecipeDetail.tsx
+│   └── RecipeDetail.test.tsx
+└── mocks/
+    ├── handlers.ts
+    └── server.ts
+```
