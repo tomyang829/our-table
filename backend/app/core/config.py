@@ -19,5 +19,16 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Set to True in production (requires HTTPS)
+    SECURE_COOKIES: bool = False
+
 
 settings = Settings()
+
+if settings.SECRET_KEY == "changeme":
+    import warnings
+    warnings.warn(
+        "SECRET_KEY is set to the default 'changeme'. "
+        "Set a strong random value in production.",
+        stacklevel=1,
+    )

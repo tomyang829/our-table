@@ -32,12 +32,21 @@ async def create_test_tables():
 
 @pytest_asyncio.fixture
 async def db_session():
-    """Each test gets a transaction that is rolled back afterward."""
+    """
+    Each test gets an outer transaction with savepoint support. Any commit() calls
+    inside route handlers commit a savepoint; the outer rollback at teardown undoes
+    everything, keeping tests fully isolated even when routes commit.
+    """
     async with test_engine.connect() as conn:
         await conn.begin()
-        async with AsyncSession(bind=conn, expire_on_commit=False) as session:
+        async with AsyncSession(
+            bind=conn,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        ) as session:
             yield session
             await session.rollback()
+        await conn.rollback()
 
 
 @pytest_asyncio.fixture

@@ -56,7 +56,8 @@ async def extract_recipe(
 
         source = SourceRecipe(url=url, **data)
         db.add(source)
-        await db.flush()  # populate source.id without committing
+        await db.flush()
+        await db.commit()
 
     # Check if this user has already saved a recipe from this source
     dup_result = await db.execute(
@@ -110,6 +111,7 @@ async def save_recipe(
     )
     db.add(user_recipe)
     await db.flush()
+    await db.commit()
 
     result2 = await db.execute(
         select(UserRecipe)
@@ -184,4 +186,5 @@ async def update_my_recipe(
         recipe.notes = body.notes
 
     await db.flush()
+    await db.commit()
     return UserRecipeResponse.model_validate(recipe)
