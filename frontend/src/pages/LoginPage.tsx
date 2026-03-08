@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button'
 
+const isDev = import.meta.env.DEV
+
 export function LoginPage() {
   const handleLogin = (provider: 'google' | 'github') => {
     window.location.href = `/api/auth/${provider}`
@@ -20,6 +22,20 @@ export function LoginPage() {
             Continue with GitHub
           </Button>
         </div>
+        {isDev && (
+          <div className="border-t pt-4">
+            <p className="mb-2 text-center text-xs text-muted-foreground">
+              Local dev — requires <code>DEV_BYPASS_AUTH=true</code>
+            </p>
+            <Button
+              className="w-full"
+              variant="secondary"
+              onClick={() => { window.location.href = '/api/auth/dev-login' }}
+            >
+              Dev Login (skip OAuth)
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

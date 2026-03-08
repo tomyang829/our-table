@@ -54,6 +54,64 @@ async def test_fetch_and_scrape_raises_on_http_error():
 
 
 @respx.mock
+async def test_fetch_and_scrape_splits_newline_embedded_instructions():
+    """Plain-text recipeInstructions with embedded newlines are split into steps."""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@type": "Recipe",
+        "name": "Newline Recipe",
+        "recipeIngredient": ["1 egg"],
+        "recipeInstructions": "Step one.\nStep two.\nStep three."
+      }
+      </script>
+    </head>
+    <body></body>
+    </html>
+    """
+    respx.get(TEST_URL).mock(return_value=httpx.Response(200, text=html))
+
+    result = await fetch_and_scrape(TEST_URL)
+
+    assert result["instructions"] == ["Step one.", "Step two.", "Step three."]
+
+
+@respx.mock
+async def test_fetch_and_scrape_splits_numbered_inline_instructions():
+    """Inline-numbered instructions ('1. Step. 2. Step.') are split into steps."""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@type": "Recipe",
+        "name": "Numbered Recipe",
+        "recipeIngredient": ["1 egg"],
+        "recipeInstructions": "1. Cook the pasta. 2. Fry the garlic. 3. Combine and serve."
+      }
+      </script>
+    </head>
+    <body></body>
+    </html>
+    """
+    respx.get(TEST_URL).mock(return_value=httpx.Response(200, text=html))
+
+    result = await fetch_and_scrape(TEST_URL)
+
+    assert result["instructions"] == [
+        "1. Cook the pasta.",
+        "2. Fry the garlic.",
+        "3. Combine and serve.",
+    ]
+
+
+@respx.mock
 async def test_fetch_and_scrape_handles_missing_optional_fields():
     minimal_html = """
     <!DOCTYPE html>

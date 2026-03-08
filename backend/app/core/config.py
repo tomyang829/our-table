@@ -22,13 +22,26 @@ class Settings(BaseSettings):
     # Set to True in production (requires HTTPS)
     SECURE_COOKIES: bool = False
 
+    # Set to True for local development to skip OAuth entirely.
+    # All API requests will be authenticated as a seeded dev user.
+    # NEVER enable this in production.
+    DEV_BYPASS_AUTH: bool = True
+
 
 settings = Settings()
 
+import warnings  # noqa: E402
+
 if settings.SECRET_KEY == "changeme":
-    import warnings
     warnings.warn(
         "SECRET_KEY is set to the default 'changeme'. "
         "Set a strong random value in production.",
+        stacklevel=1,
+    )
+
+if settings.DEV_BYPASS_AUTH:
+    warnings.warn(
+        "DEV_BYPASS_AUTH is enabled — all requests are authenticated as the dev user. "
+        "Never use this in production.",
         stacklevel=1,
     )

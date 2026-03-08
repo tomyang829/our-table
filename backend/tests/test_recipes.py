@@ -511,3 +511,91 @@ async def test_update_requires_auth(client):
     """Unauthenticated update requests are rejected with 401."""
     response = await client.put("/api/recipes/mine/1", json={"title": "X"})
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/recipes/mine/{id}
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_removes_recipe(authed_client, db_session: AsyncSession):
+    """DELETE /mine/{id} removes the recipe and returns 204."""
+    client, test_user = authed_client
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    recipe = UserRecipe(
+        user_id=test_user.id,
+        source_recipe_id=source.id,
+        title="To Delete",
+    )
+    db_session.add(recipe)
+    await db_session.flush()
+    recipe_id = recipe.id
+
+    response = await client.delete(f"/api/recipes/mine/{recipe_id}")
+
+    assert response.status_code == 204
+
+    # Confirm it's gone from the DB
+    check = await db_session.get(UserRecipe, recipe_id)
+    assert check is None
+
+
+async def test_delete_not_found_returns_404(authed_client):
+    """Deleting a non-existent recipe returns 404."""
+    client, _ = authed_client
+
+    response = await client.delete("/api/recipes/mine/99999")
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+async def test_delete_other_users_recipe_returns_404(
+    authed_client, db_session: AsyncSession
+):
+    """A user cannot delete another user's recipe — 404 to avoid enumeration."""
+    client, _ = authed_client
+
+    other_user = User(
+        email="other@example.com",
+        name="Other User",
+        oauth_provider="github",
+        oauth_sub="github_sub_delete_test",
+    )
+    db_session.add(other_user)
+
+    source = SourceRecipe(
+        url=RECIPE_URL,
+        title="Carbonara",
+        ingredients=["pasta"],
+        instructions=["cook"],
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    other_recipe = UserRecipe(
+        user_id=other_user.id,
+        source_recipe_id=source.id,
+        title="Their Recipe",
+    )
+    db_session.add(other_recipe)
+    await db_session.flush()
+
+    response = await client.delete(f"/api/recipes/mine/{other_recipe.id}")
+
+    assert response.status_code == 404
+
+
+async def test_delete_requires_auth(client):
+    """Unauthenticated delete requests are rejected with 401."""
+    response = await client.delete("/api/recipes/mine/1")
+    assert response.status_code == 401

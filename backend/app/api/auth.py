@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import create_access_token
+from app.core.auth import _get_or_create_dev_user, create_access_token
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
@@ -52,6 +52,35 @@ def _verify_state(request: Request, state: str | None) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or missing OAuth state parameter",
         )
+
+
+@router.get("/dev-login")
+async def dev_login(db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+    """Issue a session for the local dev user without going through OAuth.
+
+    Only available when DEV_BYPASS_AUTH=true. Safe to expose because the
+    setting is opt-in and should never be set in production.
+    """
+    if not settings.DEV_BYPASS_AUTH:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found",
+        )
+    user = await _get_or_create_dev_user(db)
+    token = create_access_token(user.id)
+    response = RedirectResponse(
+        url=settings.FRONTEND_URL,
+        status_code=status.HTTP_302_FOUND,
+    )
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+        secure=settings.SECURE_COOKIES,
+    )
+    return response
 
 
 @router.get("/google")

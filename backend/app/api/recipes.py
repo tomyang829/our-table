@@ -157,6 +157,27 @@ async def get_my_recipe(
     return UserRecipeResponse.model_validate(recipe)
 
 
+@router.delete("/mine/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_recipe(
+    recipe_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    result = await db.execute(
+        select(UserRecipe).where(
+            UserRecipe.id == recipe_id, UserRecipe.user_id == current_user.id
+        )
+    )
+    recipe = result.scalar_one_or_none()
+    if recipe is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+    await db.delete(recipe)
+    await db.commit()
+
+
 @router.put("/mine/{recipe_id}", response_model=UserRecipeResponse)
 async def update_my_recipe(
     recipe_id: int,

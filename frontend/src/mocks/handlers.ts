@@ -63,4 +63,10 @@ export const handlers = [
   http.post('/api/recipes/source/:id/save', () =>
     HttpResponse.json(mockUserRecipe, { status: 201 }),
   ),
+
+  http.delete('/api/recipes/mine/:id', ({ params }) => {
+    const id = Number(params['id'])
+    if (id !== mockUserRecipe.id) return new HttpResponse(null, { status: 404 })
+    return new HttpResponse(null, { status: 204 })
+  }),
 ]

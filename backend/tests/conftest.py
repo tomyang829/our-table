@@ -8,6 +8,10 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models.user import User
 
+# Always disable the dev bypass in tests so auth tests behave correctly
+# regardless of what is set in the local .env file.
+settings.DEV_BYPASS_AUTH = False
+
 test_engine = create_async_engine(settings.TEST_DATABASE_URL, echo=False)
 
 TestAsyncSession = async_sessionmaker(

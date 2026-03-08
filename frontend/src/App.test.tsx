@@ -8,8 +8,8 @@ describe('App', () => {
     expect(document.body).toBeTruthy()
   })
 
-  it('redirects / to /dashboard', () => {
+  it('redirects / to /dashboard after auth check resolves', async () => {
     render(<App />)
-    expect(screen.getByText('My Recipes')).toBeInTheDocument()
+    expect(await screen.findByText('My Recipes')).toBeInTheDocument()
   })
 })
