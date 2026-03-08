@@ -27,9 +27,11 @@ export interface UserRecipe {
   ingredients: string[]
   instructions: string[]
   notes: string | null
+  image_url: string | null
   created_at: string
   updated_at: string
   source_recipe?: SourceRecipe
+  deviates_from_source?: boolean
 }
 
 export interface RecipeShare {

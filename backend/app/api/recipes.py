@@ -1,10 +1,13 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.source_recipe import SourceRecipe
 from app.models.user import User
@@ -20,6 +23,31 @@ from app.schemas.recipes import (
 from app.services.extractor import fetch_and_scrape
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
+
+ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _deviates_from_source(recipe: UserRecipe) -> bool:
+    # User-uploaded image counts as an edit
+    if recipe.image_url:
+        return True
+    if recipe.source_recipe is None:
+        return False
+    src = recipe.source_recipe
+    if (recipe.title or "") != (src.title or ""):
+        return True
+    if (recipe.ingredients or []) != (src.ingredients or []):
+        return True
+    if (recipe.instructions or []) != (src.instructions or []):
+        return True
+    return False
+
+
+def _recipe_response(recipe: UserRecipe) -> UserRecipeResponse:
+    resp = UserRecipeResponse.model_validate(recipe)
+    resp.deviates_from_source = _deviates_from_source(recipe)
+    return resp
 
 
 @router.post("/extract", response_model=ExtractResponse)
@@ -119,7 +147,7 @@ async def save_recipe(
         .options(selectinload(UserRecipe.source_recipe))
     )
     saved = result2.scalar_one()
-    return UserRecipeResponse.model_validate(saved)
+    return _recipe_response(saved)
 
 
 @router.get("/mine", response_model=list[UserRecipeResponse])
@@ -134,7 +162,7 @@ async def list_my_recipes(
         .order_by(UserRecipe.created_at.desc())
     )
     recipes = result.scalars().all()
-    return [UserRecipeResponse.model_validate(r) for r in recipes]
+    return [_recipe_response(r) for r in recipes]
 
 
 @router.get("/mine/{recipe_id}", response_model=UserRecipeResponse)
@@ -154,7 +182,54 @@ async def get_my_recipe(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe not found",
         )
-    return UserRecipeResponse.model_validate(recipe)
+    return _recipe_response(recipe)
+
+
+@router.post("/mine/{recipe_id}/image", response_model=UserRecipeResponse)
+async def upload_recipe_image(
+    recipe_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserRecipeResponse:
+    result = await db.execute(
+        select(UserRecipe)
+        .where(UserRecipe.id == recipe_id, UserRecipe.user_id == current_user.id)
+        .options(selectinload(UserRecipe.source_recipe))
+    )
+    recipe = result.scalar_one_or_none()
+    if recipe is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid file type. Allowed: JPEG, PNG, WebP",
+        )
+
+    ext = ".jpg" if "jpeg" in content_type else ".png" if "png" in content_type else ".webp"
+    max_size = 5 * 1024 * 1024  # 5 MB
+    contents = await file.read()
+    if len(contents) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File too large. Maximum size is 5 MB.",
+        )
+
+    upload_dir = Path(settings.UPLOAD_DIR) / "recipes"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    path = upload_dir / f"{recipe_id}{ext}"
+    path.write_bytes(contents)
+
+    image_url = f"/api/uploads/recipes/{recipe_id}{ext}"
+    recipe.image_url = image_url
+    await db.flush()
+    await db.commit()
+    return _recipe_response(recipe)
 
 
 @router.delete("/mine/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -208,4 +283,4 @@ async def update_my_recipe(
 
     await db.flush()
     await db.commit()
-    return UserRecipeResponse.model_validate(recipe)
+    return _recipe_response(recipe)

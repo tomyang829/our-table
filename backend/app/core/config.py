@@ -19,6 +19,9 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Directory for uploaded recipe images (relative to backend root or absolute path)
+    UPLOAD_DIR: str = "uploads"
+
     # Set to True in production (requires HTTPS)
     SECURE_COOKIES: bool = False
 

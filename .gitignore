@@ -36,6 +36,9 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Uploaded recipe images (backend)
+backend/uploads/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/

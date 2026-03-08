@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useRecipe } from '@/hooks/useRecipes'
 import { useUpdateRecipe } from '@/hooks/useUpdateRecipe'
+import { useUploadRecipeImage } from '@/hooks/useUploadRecipeImage'
 import { useDeleteRecipe } from '@/hooks/useDeleteRecipe'
 
 // Auto-grows to fit its content so long steps don't get clipped.
@@ -99,7 +100,9 @@ export function RecipeDetailPage() {
 
   const { data: recipe, isLoading, isError } = useRecipe(recipeId)
   const updateMutation = useUpdateRecipe()
+  const uploadImageMutation = useUploadRecipeImage()
   const deleteMutation = useDeleteRecipe()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [isEditing, setIsEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -285,6 +288,74 @@ export function RecipeDetailPage() {
       ) : (
         <div className="space-y-6">
           <h1 className="text-2xl font-bold">{recipe.title}</h1>
+
+          {(recipe.image_url ?? recipe.source_recipe?.image_url) && (
+            <div className="space-y-2">
+              <img
+                src={recipe.image_url ?? recipe.source_recipe?.image_url ?? ''}
+                alt={recipe.title ?? ''}
+                className="w-full rounded-xl object-cover max-h-80"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  aria-label="Upload recipe image"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      uploadImageMutation.mutate({ recipeId: recipe.id, file })
+                      e.target.value = ''
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadImageMutation.isPending}
+                >
+                  {uploadImageMutation.isPending ? 'Uploading…' : 'Change image'}
+                </Button>
+                {uploadImageMutation.isError && (
+                  <span className="text-sm text-destructive">Upload failed.</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!recipe.image_url && !recipe.source_recipe?.image_url && (
+            <div className="space-y-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                aria-label="Upload recipe image"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    uploadImageMutation.mutate({ recipeId: recipe.id, file })
+                    e.target.value = ''
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadImageMutation.isPending}
+              >
+                {uploadImageMutation.isPending ? 'Uploading…' : 'Upload recipe image'}
+              </Button>
+              {uploadImageMutation.isError && (
+                <p className="text-sm text-destructive">Upload failed. Please try again.</p>
+              )}
+            </div>
+          )}
 
           <section>
             <h2 className="mb-2 text-lg font-semibold">Ingredients</h2>

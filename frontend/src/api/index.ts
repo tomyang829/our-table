@@ -1,9 +1,9 @@
 import Cookies from 'js-cookie'
 
-function authHeaders(): Record<string, string> {
+function authHeaders(json = true): Record<string, string> {
   const token = Cookies.get('access_token')
   return {
-    'Content-Type': 'application/json',
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 }
@@ -33,9 +33,16 @@ export const api = {
   post<T>(path: string, body?: unknown): Promise<T> {
     return fetch(path, {
       method: 'POST',
-      headers: authHeaders(),
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: authHeaders(body !== undefined && !(body instanceof FormData)),
+      body:
+        body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     }).then((r) => handleResponse<T>(r))
+  },
+
+  uploadRecipeImage<T>(path: string, file: File): Promise<T> {
+    const form = new FormData()
+    form.append('file', file)
+    return this.post<T>(path, form)
   },
 
   put<T>(path: string, body?: unknown): Promise<T> {

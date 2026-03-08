@@ -43,8 +43,10 @@ class UserRecipeResponse(BaseModel):
     ingredients: list | None
     instructions: list | None
     notes: str | None
+    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
     source_recipe: SourceRecipeResponse | None = None
+    deviates_from_source: bool = False
 
     model_config = ConfigDict(from_attributes=True)

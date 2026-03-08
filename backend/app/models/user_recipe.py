@@ -19,6 +19,7 @@ class UserRecipe(Base):
     ingredients: Mapped[list | None] = mapped_column(JSONB)
     instructions: Mapped[list | None] = mapped_column(JSONB)
     notes: Mapped[str | None] = mapped_column(Text)
+    image_url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

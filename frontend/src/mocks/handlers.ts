@@ -30,9 +30,11 @@ export const mockUserRecipe: UserRecipe = {
   ingredients: ['1 cup flour', '2 eggs'],
   instructions: ['Mix ingredients', 'Bake at 350°F'],
   notes: null,
+  image_url: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
   source_recipe: mockSourceRecipe,
+  deviates_from_source: false,
 }
 
 export const handlers = [
@@ -68,5 +70,14 @@ export const handlers = [
     const id = Number(params['id'])
     if (id !== mockUserRecipe.id) return new HttpResponse(null, { status: 404 })
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('/api/recipes/mine/:id/image', ({ params }) => {
+    const id = Number(params['id'])
+    if (id !== mockUserRecipe.id) return new HttpResponse(null, { status: 404 })
+    return HttpResponse.json({
+      ...mockUserRecipe,
+      image_url: '/api/uploads/recipes/1.jpg',
+    })
   }),
 ]
