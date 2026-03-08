@@ -24,10 +24,10 @@ describe('RecipeDetailPage', () => {
   it('renders recipe title, ingredients, and instructions on success', async () => {
     renderWithProviders(<RecipeDetailPage />, OPTS)
     expect(await screen.findByText(mockUserRecipe.title)).toBeInTheDocument()
-    // "1 cup flour" appears in both user recipe and "Compare with original" section
+    // ingredients and instructions appear in both the user recipe and "Compare with original"
     expect(screen.getAllByText('1 cup flour').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Mix ingredients')).toBeInTheDocument()
-    expect(screen.getByText('Bake at 350°F')).toBeInTheDocument()
+    expect(screen.getAllByText('Mix ingredients').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Bake at 350°F').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows error alert when fetch fails', async () => {
@@ -100,10 +100,13 @@ describe('RecipeDetailPage', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
   })
 
-  it('shows "Compare with original" section when source_recipe is present', async () => {
+  it('shows "Compare with original" section with ingredients and instructions', async () => {
     renderWithProviders(<RecipeDetailPage />, OPTS)
     await screen.findByText(mockUserRecipe.title)
     expect(screen.getByText(/compare with original/i)).toBeInTheDocument()
+    expect(screen.getByText(/original ingredients/i)).toBeInTheDocument()
+    expect(screen.getByText(/original instructions/i)).toBeInTheDocument()
+    expect(screen.getAllByText(mockSourceRecipe.instructions[0]).length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows the original source URL as a link inside "Compare with original"', async () => {

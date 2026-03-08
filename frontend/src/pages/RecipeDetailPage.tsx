@@ -344,6 +344,18 @@ export function RecipeDetailPage() {
                     ))}
                   </ul>
                 </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                    Original instructions:
+                  </p>
+                  <ol className="list-inside list-decimal space-y-1">
+                    {recipe.source_recipe.instructions.map((step, i) => (
+                      <li key={i} className="text-xs text-muted-foreground">
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               </div>
             </details>
           )}
