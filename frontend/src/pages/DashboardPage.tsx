@@ -12,14 +12,14 @@ function RecipeCard({ recipe }: { recipe: UserRecipe }) {
   return (
     <Link
       to={`/recipes/${recipe.id}`}
-      className="block overflow-hidden rounded-lg border transition-colors hover:bg-accent"
+      className="group block overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md"
     >
-      <img src={imageUrl} alt="" className="h-40 w-full object-cover" />
+      <img src={imageUrl} alt="" className="h-44 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
       <div className="p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-semibold">{recipe.title}</h3>
+          <h3 className="text-[1.03rem] font-semibold tracking-tight">{recipe.title}</h3>
           <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
               isEdited
                 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
                 : 'bg-muted text-muted-foreground'
@@ -45,9 +45,12 @@ export function DashboardPage() {
 
   return (
     <div className="container mx-auto max-w-4xl p-6">
+      <div className="mb-5 rounded-xl border border-accent bg-accent/60 px-4 py-3 text-sm text-accent-foreground">
+        Save and personalize your recipe collection in one place.
+      </div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">My Recipes</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">My Recipes</h1>
           {user?.name && (
             <p className="text-sm text-muted-foreground">Welcome, {user.name}</p>
           )}

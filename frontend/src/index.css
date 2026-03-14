@@ -23,29 +23,38 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-ui);
 }
 
 @layer base {
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --font-ui:
+      "Inter",
+      "Avenir Next",
+      "Avenir",
+      "Helvetica Neue",
+      "Segoe UI",
+      "Arial",
+      sans-serif;
+    --background: oklch(0.985 0.01 95);
+    --foreground: oklch(0.31 0.05 155);
+    --card: oklch(0.995 0.004 95);
+    --card-foreground: var(--foreground);
+    --popover: oklch(0.995 0.004 95);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(0.47 0.12 154);
+    --primary-foreground: oklch(0.99 0.01 95);
+    --secondary: oklch(0.94 0.03 150);
+    --secondary-foreground: oklch(0.35 0.06 155);
+    --muted: oklch(0.95 0.012 95);
+    --muted-foreground: oklch(0.53 0.03 145);
+    --accent: oklch(0.93 0.04 145);
+    --accent-foreground: oklch(0.35 0.06 155);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --radius: 0.625rem;
+    --border: oklch(0.9 0.018 145);
+    --input: oklch(0.9 0.018 145);
+    --ring: oklch(0.55 0.1 152);
+    --radius: 0.8rem;
   }
 
   .dark {
@@ -76,5 +85,7 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-ui);
+    font-feature-settings: "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
   }
 }
