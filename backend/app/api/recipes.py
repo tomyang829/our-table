@@ -64,8 +64,12 @@ async def extract_recipe(
     result = await db.execute(select(SourceRecipe).where(SourceRecipe.url == url))
     source = result.scalar_one_or_none()
 
-    # Re-scrape when missing (new URL) or when we have no title (e.g. previous fallback failed)
-    if source is None or not source.title:
+    # Re-scrape when missing (new URL) or when we only have partial fallback data
+    # from a previous run (e.g. title present but no ingredients/instructions).
+    needs_rescrape = source is None or not source.title or (
+        not source.ingredients and not source.instructions
+    )
+    if needs_rescrape:
         try:
             data = await fetch_and_scrape(url)
         except httpx.HTTPStatusError as exc:

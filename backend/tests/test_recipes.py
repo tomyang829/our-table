@@ -77,6 +77,38 @@ async def test_extract_existing_source_returns_without_scraping(
 
 
 @respx.mock
+async def test_extract_existing_title_only_source_rescrapes(
+    authed_client, db_session: AsyncSession
+):
+    """If cached source only has fallback metadata, endpoint re-scrapes and updates it."""
+    client, _ = authed_client
+
+    existing = SourceRecipe(
+        url=RECIPE_URL,
+        title="Old Fallback Title",
+        ingredients=[],
+        instructions=[],
+    )
+    db_session.add(existing)
+    await db_session.flush()
+
+    respx.get(RECIPE_URL).mock(return_value=httpx.Response(200, text=RECIPE_HTML))
+    response = await client.post("/api/recipes/extract", json={"url": RECIPE_URL})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source_recipe"]["id"] == existing.id
+    assert data["source_recipe"]["title"] == "Spaghetti Carbonara"
+    assert data["source_recipe"]["ingredients"] == [
+        "200g spaghetti",
+        "100g pancetta",
+        "2 eggs",
+    ]
+    assert len(data["source_recipe"]["instructions"]) == 2
+    assert data["partial_parse"] is False
+
+
+@respx.mock
 async def test_extract_duplicate_user_save_returns_409(
     authed_client, db_session: AsyncSession
 ):

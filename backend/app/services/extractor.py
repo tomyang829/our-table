@@ -1,3 +1,4 @@
+import json
 import re
 
 import httpx
@@ -94,6 +95,96 @@ def _html_fallback(html: str, url: str = "") -> dict:
     }
 
 
+def _portable_text_to_str(blocks: list) -> str:
+    """Concatenate plain text from Sanity Portable Text block list."""
+    parts = []
+    for block in blocks:
+        if block.get("_type") == "block":
+            text = "".join(
+                span.get("text", "")
+                for span in block.get("children", [])
+                if span.get("_type") == "span"
+            )
+            if text.strip():
+                parts.append(text.strip())
+    return " ".join(parts)
+
+
+def _extract_madewithlau(html: str) -> dict | None:
+    """Extract recipe data from madewithlau.com's __NEXT_DATA__ tRPC state.
+
+    madewithlau.com uses Next.js + Sanity CMS with a custom tRPC API.  The
+    recipe is embedded in __NEXT_DATA__ under trpcState.queries[*].state.data
+    for the "recipe.bySlug" query key — there is no JSON-LD on the page so
+    recipe-scrapers' wild mode finds nothing.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    script = soup.find("script", id="__NEXT_DATA__")
+    if not script or not script.string:
+        return None
+
+    try:
+        data = json.loads(script.string)
+        queries = data["props"]["pageProps"]["trpcState"]["queries"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+    recipe = None
+    for q in queries:
+        key = q.get("queryKey", [])
+        if key and key[0] == "recipe.bySlug":
+            recipe = q.get("state", {}).get("data")
+            break
+
+    if not recipe:
+        return None
+
+    title = recipe.get("englishTitle") or recipe.get("title")
+    description = recipe.get("taglineSummary") or recipe.get("seoDescription")
+
+    image_url = None
+    for img_key in ("mainImage", "mainImage16x9"):
+        img = recipe.get(img_key)
+        if isinstance(img, dict):
+            image_url = img.get("asset", {}).get("url")
+            if image_url:
+                break
+
+    servings = str(recipe["servings"]) if recipe.get("servings") else None
+
+    ingredients = []
+    for item in recipe.get("ingredientsArray", []):
+        if item.get("_type") != "ingredient":
+            continue
+        amount = item.get("amount", "")
+        unit = item.get("unit", "")
+        name = item.get("item", "")
+        parts = [str(amount) if amount else "", unit, name]
+        ingredient_str = " ".join(p for p in parts if p).strip()
+        if ingredient_str:
+            ingredients.append(ingredient_str)
+
+    instructions = []
+    for step in recipe.get("instructionsArray", []):
+        headline = step.get("headline", "")
+        desc_text = _portable_text_to_str(step.get("freeformDescription", []))
+        if headline and desc_text:
+            instructions.append(f"{headline}: {desc_text}")
+        elif headline:
+            instructions.append(headline)
+        elif desc_text:
+            instructions.append(desc_text)
+
+    return {
+        "title": title,
+        "description": description,
+        "ingredients": ingredients,
+        "instructions": instructions,
+        "image_url": image_url,
+        "servings": servings,
+    }
+
+
 # Full browser-like headers to avoid 403s from sites that check request headers.
 # Use only gzip/deflate so the response is decompressed (httpx doesn't decompress br without brotli).
 _BROWSER_HEADERS = {
@@ -134,7 +225,9 @@ async def fetch_and_scrape(url: str) -> dict:
     Tries in order:
     1. Site-specific scrapers (e.g. Half Baked Harvest, 500+ supported sites).
     2. Schema.org Recipe markup (wild mode) for any site with JSON-LD.
-    3. Basic HTML metadata (title, description, image) so the user can save the URL
+    3. Custom extractors for sites with non-standard data embedding
+       (e.g. madewithlau.com which uses Next.js + Sanity CMS tRPC state).
+    4. Basic HTML metadata (title, description, image) so the user can save the URL
        and fill in ingredients/instructions manually.
     """
     async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
@@ -143,6 +236,9 @@ async def fetch_and_scrape(url: str) -> dict:
 
     scraper = _scrape_with_scraper(response.text, url)
     if scraper is None:
+        mwl = _extract_madewithlau(response.text)
+        if mwl is not None:
+            return mwl
         return _html_fallback(response.text, url)
 
     ingredients = _normalise_list(_safe(scraper.ingredients) or [])
