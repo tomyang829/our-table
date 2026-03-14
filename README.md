@@ -15,13 +15,13 @@ A personal recipe manager. Paste a URL from any recipe website, extract the reci
 
 ## Features
 
-- **Extract** — paste any recipe URL and pull out title, ingredients, instructions, serving size, and thumbnail automatically
+- **Extract** — paste any recipe URL and pull out title, ingredients, instructions, and serving size automatically
 - **Save & edit** — keep your own copy with per-step ingredient and instruction editing; the original is always preserved
 - **Serving size adjuster** — stepper on the recipe page dynamically scales ingredient quantities (handles fractions, mixed numbers, and Unicode vulgar fractions)
-- **Recipe images** — scraped thumbnails shown on card and detail views; upload your own photo to override
+- **Recipe images** — recipes use your uploaded image when present; otherwise a bundled default image is shown
 - **Duplicate detection** — warns when you try to save a URL you've already saved, with options to view the existing copy or save another
 - **Edited / As-is labels** — list view badges show whether a recipe has been modified from the original (changed text, custom image, or adjusted servings)
-- **Partial-parse fallback** — sites without structured recipe markup (e.g. Squarespace blogs) still load with title and image; fill in the details manually
+- **Partial-parse fallback** — sites without structured recipe markup (e.g. Squarespace blogs) still load with title/description; fill in the details manually
 - **Delete** — remove recipes you no longer need
 - **Compare with original** — view the scraped original alongside your edited version, with a link back to the source
 
@@ -43,7 +43,8 @@ our-table/
 │   └── pyproject.toml         # Python deps (managed with uv)
 ├── frontend/
 │   ├── public/
-│   │   └── logo.png           # App logo served as static asset
+│   │   ├── logo.png                   # App logo served as static asset
+│   │   └── default-recipe-image.png   # Default recipe image fallback
 │   └── src/
 │       ├── pages/             # Route-level components + co-located tests
 │       ├── components/        # Shared UI components (TopBanner, etc.)
@@ -104,9 +105,13 @@ Add `DEV_BYPASS_AUTH=true` to `backend/.env`. All API requests will be automatic
 
 The login page also shows a **"Dev Login (skip OAuth)"** button when running in dev mode that hits `GET /api/auth/dev-login`, sets a real session cookie, and redirects to the app.
 
-### Uploaded images
+### Recipe images
 
-User-uploaded recipe images are stored under `backend/uploads/recipes/` and served at `/api/uploads/`. This directory is gitignored. The path can be changed via `UPLOAD_DIR` in `backend/.env`.
+For copyright reasons, extracted source images are not scraped or saved.
+
+- User-uploaded recipe images are stored under `backend/uploads/recipes/` and served at `/api/uploads/`.
+- The upload directory is gitignored and can be changed via `UPLOAD_DIR` in `backend/.env`.
+- When a recipe has no uploaded image, the frontend falls back to `frontend/public/default-recipe-image.png`.
 
 ## Running tests
 
@@ -149,7 +154,7 @@ cd frontend && npm run test -- --run    # frontend only
 | `user_recipes` | `id`, `user_id`, `source_recipe_id`, `title`, `ingredients`, `instructions`, `notes`, `image_url`, `servings`, `created_at`, `updated_at` |
 | `recipe_shares` | `id`, `user_recipe_id`, `slug` (unique) |
 
-`source_recipes` stores the original scraped content and is never modified. All user edits (including custom images and serving size) live only in `user_recipes`.
+`source_recipes` stores the original scraped content and is never modified. `image_url` remains in schema compatibility but is no longer populated by extractor logic. All user edits (including custom images and serving size) live only in `user_recipes`.
 
 ## Stopping
 
