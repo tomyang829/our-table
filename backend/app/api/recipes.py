@@ -1,5 +1,6 @@
 import httpx
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from app.schemas.recipes import (
     ExtractRequest,
     ExtractResponse,
     SourceRecipeResponse,
+    UserRecipeCreateRequest,
     UserRecipeResponse,
     UserRecipeSaveRequest,
     UserRecipeUpdate,
@@ -127,6 +129,62 @@ async def extract_recipe(
         source_recipe=SourceRecipeResponse.model_validate(source),
         partial_parse=partial,
     )
+
+
+@router.post(
+    "/mine",
+    response_model=UserRecipeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_my_recipe(
+    body: UserRecipeCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserRecipeResponse:
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Title is required",
+        )
+
+    ingredients = [item.strip() for item in body.ingredients if item and item.strip()]
+    instructions = [step.strip() for step in body.instructions if step and step.strip()]
+    servings = body.servings.strip() if body.servings else None
+    notes = body.notes.strip() if body.notes else None
+
+    manual_source = SourceRecipe(
+        url=f"manual://{current_user.id}/{uuid4()}",
+        title=title,
+        description=None,
+        ingredients=ingredients,
+        instructions=instructions,
+        image_url=None,
+        servings=servings,
+    )
+    db.add(manual_source)
+    await db.flush()
+
+    user_recipe = UserRecipe(
+        user_id=current_user.id,
+        source_recipe_id=manual_source.id,
+        title=title,
+        ingredients=ingredients,
+        instructions=instructions,
+        notes=notes,
+        servings=servings,
+    )
+    db.add(user_recipe)
+    await db.flush()
+    await db.commit()
+
+    result = await db.execute(
+        select(UserRecipe)
+        .where(UserRecipe.id == user_recipe.id)
+        .options(selectinload(UserRecipe.source_recipe))
+    )
+    created = result.scalar_one()
+    return _recipe_response(created)
 
 
 @router.post(

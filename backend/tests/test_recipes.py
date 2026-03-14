@@ -229,6 +229,82 @@ async def test_save_requires_auth(client):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/recipes/mine
+# ---------------------------------------------------------------------------
+
+
+async def test_create_recipe_from_scratch(authed_client):
+    """Creating a recipe from scratch stores both source and user copies."""
+    client, test_user = authed_client
+
+    response = await client.post(
+        "/api/recipes/mine",
+        json={
+            "title": "Grandma's Soup",
+            "ingredients": ["2 carrots", "1 onion"],
+            "instructions": ["Chop vegetables", "Simmer 30 minutes"],
+            "notes": "Best with crusty bread",
+            "servings": "4",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["user_id"] == test_user.id
+    assert data["title"] == "Grandma's Soup"
+    assert data["ingredients"] == ["2 carrots", "1 onion"]
+    assert data["instructions"] == ["Chop vegetables", "Simmer 30 minutes"]
+    assert data["notes"] == "Best with crusty bread"
+    assert data["servings"] == "4"
+    assert data["source_recipe"]["url"].startswith(f"manual://{test_user.id}/")
+
+
+async def test_create_recipe_trims_whitespace(authed_client):
+    """Whitespace-only list entries are removed and strings are trimmed."""
+    client, _ = authed_client
+
+    response = await client.post(
+        "/api/recipes/mine",
+        json={
+            "title": "  Quick Salad  ",
+            "ingredients": [" lettuce ", "   ", ""],
+            "instructions": [" rinse ", "  ", "serve"],
+            "notes": "  use olive oil ",
+            "servings": " 2 bowls ",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Quick Salad"
+    assert data["ingredients"] == ["lettuce"]
+    assert data["instructions"] == ["rinse", "serve"]
+    assert data["notes"] == "use olive oil"
+    assert data["servings"] == "2 bowls"
+
+
+async def test_create_recipe_requires_title(authed_client):
+    """Creating a manual recipe without title returns 422."""
+    client, _ = authed_client
+
+    response = await client.post(
+        "/api/recipes/mine",
+        json={"title": "   ", "ingredients": [], "instructions": []},
+    )
+
+    assert response.status_code == 422
+
+
+async def test_create_recipe_requires_auth(client):
+    """Unauthenticated create requests are rejected with 401."""
+    response = await client.post(
+        "/api/recipes/mine",
+        json={"title": "No Auth Recipe", "ingredients": [], "instructions": []},
+    )
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
 # GET /api/recipes/mine
 # ---------------------------------------------------------------------------
 

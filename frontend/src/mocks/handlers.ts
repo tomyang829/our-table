@@ -39,6 +39,26 @@ export const mockUserRecipe: UserRecipe = {
   deviates_from_source: false,
 }
 
+export const mockManualUserRecipe: UserRecipe = {
+  ...mockUserRecipe,
+  id: 2,
+  source_recipe_id: 2,
+  title: 'Homemade Soup',
+  ingredients: ['2 carrots', '1 onion'],
+  instructions: ['Chop vegetables', 'Simmer 30 minutes'],
+  notes: 'Add parsley at the end',
+  servings: '4',
+  source_recipe: {
+    ...mockSourceRecipe,
+    id: 2,
+    url: 'manual://1/mock',
+    title: 'Homemade Soup',
+    ingredients: ['2 carrots', '1 onion'],
+    instructions: ['Chop vegetables', 'Simmer 30 minutes'],
+    servings: '4',
+  },
+}
+
 export const handlers = [
   http.get('/api/users/me', () => HttpResponse.json(mockUser)),
 
@@ -67,6 +87,34 @@ export const handlers = [
   http.post('/api/recipes/source/:id/save', () =>
     HttpResponse.json(mockUserRecipe, { status: 201 }),
   ),
+
+  http.post('/api/recipes/mine', async ({ request }) => {
+    const body = (await request.json()) as {
+      title: string
+      ingredients?: string[]
+      instructions?: string[]
+      notes?: string | null
+      servings?: string | null
+    }
+    return HttpResponse.json(
+      {
+        ...mockManualUserRecipe,
+        title: body.title,
+        ingredients: body.ingredients ?? [],
+        instructions: body.instructions ?? [],
+        notes: body.notes ?? null,
+        servings: body.servings ?? null,
+        source_recipe: {
+          ...mockManualUserRecipe.source_recipe!,
+          title: body.title,
+          ingredients: body.ingredients ?? [],
+          instructions: body.instructions ?? [],
+          servings: body.servings ?? null,
+        },
+      },
+      { status: 201 },
+    )
+  }),
 
   http.delete('/api/recipes/mine/:id', ({ params }) => {
     const id = Number(params['id'])

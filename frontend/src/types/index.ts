@@ -53,3 +53,11 @@ export interface ExtractResponse {
 export interface ApiError {
   detail: string
 }
+
+export interface CreateRecipeInput {
+  title: string
+  ingredients: string[]
+  instructions: string[]
+  notes?: string | null
+  servings?: string | null
+}

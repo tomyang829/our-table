@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ExtractRequest(BaseModel):
@@ -30,6 +30,14 @@ class ExtractResponse(BaseModel):
 
 class UserRecipeSaveRequest(BaseModel):
     notes: str | None = None
+
+
+class UserRecipeCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    ingredients: list[str] = Field(default_factory=list)
+    instructions: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    servings: str | None = None
 
 
 class UserRecipeUpdate(BaseModel):
