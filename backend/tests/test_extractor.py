@@ -44,7 +44,7 @@ async def test_fetch_and_scrape_returns_recipe_data():
     assert result["description"] == "A simple pasta dish"
     assert "200g pasta" in result["ingredients"]
     assert len(result["instructions"]) == 2
-    assert result["image_url"] == "https://example.com/pasta.jpg"
+    assert result["image_url"] is None
 
 
 @respx.mock
@@ -134,7 +134,7 @@ async def test_fetch_and_scrape_fallback_when_no_recipe_schema():
 
     assert result["title"] == "Rosemary Garlic Pull Apart Bread"
     assert result["description"] == "Flaky and flavorful pull apart bread."
-    assert result["image_url"] == "https://example.com/bread.jpg"
+    assert result["image_url"] is None
     assert result["ingredients"] == []
     assert result["instructions"] == []
 
@@ -343,12 +343,12 @@ def test_extract_madewithlau_instructions():
     assert result["instructions"][1] == "Cook in clay pot: Add rice and water to pot. Cook on medium heat."
 
 
-def test_extract_madewithlau_image_and_servings():
+def test_extract_madewithlau_does_not_capture_image_and_keeps_servings():
     html = _make_mwl_html(MWL_NEXT_DATA)
     result = _extract_madewithlau(html)
 
     assert result is not None
-    assert result["image_url"] == "https://cdn.sanity.io/images/test/claypot.jpg"
+    assert result["image_url"] is None
     assert result["servings"] == "4"
 
 
@@ -392,4 +392,4 @@ async def test_fetch_and_scrape_uses_madewithlau_extractor():
     assert result["title"] == "Clay Pot Rice"
     assert len(result["ingredients"]) == 2
     assert len(result["instructions"]) == 2
-    assert result["image_url"] == "https://cdn.sanity.io/images/test/claypot.jpg"
+    assert result["image_url"] is None

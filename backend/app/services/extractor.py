@@ -47,7 +47,7 @@ def _normalise_list(items: list[str]) -> list[str]:
 def _html_fallback(html: str, url: str = "") -> dict:
     """Best-effort metadata extraction for pages without schema.org recipe markup.
 
-    Pulls the page title and og:image so the user can at least save the URL and
+    Pulls lightweight page metadata so the user can at least save the URL and
     fill in ingredients/instructions manually rather than hitting a hard 422.
     Uses url as last-resort title when the page has no parseable title (e.g. JS-only).
     """
@@ -79,18 +79,13 @@ def _html_fallback(html: str, url: str = "") -> dict:
         if meta_desc and meta_desc.get("content"):
             description = str(meta_desc["content"]).strip()
 
-    # Image: og:image
-    image_url: str | None = None
-    og_image = soup.find("meta", property="og:image")
-    if og_image and og_image.get("content"):
-        image_url = str(og_image["content"]).strip()
-
     return {
         "title": title,
         "description": description,
         "ingredients": [],
         "instructions": [],
-        "image_url": image_url,
+        # For copyright reasons, never scrape/store source-site images.
+        "image_url": None,
         "servings": None,
     }
 
@@ -142,14 +137,6 @@ def _extract_madewithlau(html: str) -> dict | None:
     title = recipe.get("englishTitle") or recipe.get("title")
     description = recipe.get("taglineSummary") or recipe.get("seoDescription")
 
-    image_url = None
-    for img_key in ("mainImage", "mainImage16x9"):
-        img = recipe.get(img_key)
-        if isinstance(img, dict):
-            image_url = img.get("asset", {}).get("url")
-            if image_url:
-                break
-
     servings = str(recipe["servings"]) if recipe.get("servings") else None
 
     ingredients = []
@@ -180,7 +167,8 @@ def _extract_madewithlau(html: str) -> dict | None:
         "description": description,
         "ingredients": ingredients,
         "instructions": instructions,
-        "image_url": image_url,
+        # For copyright reasons, never scrape/store source-site images.
+        "image_url": None,
         "servings": servings,
     }
 
@@ -227,7 +215,7 @@ async def fetch_and_scrape(url: str) -> dict:
     2. Schema.org Recipe markup (wild mode) for any site with JSON-LD.
     3. Custom extractors for sites with non-standard data embedding
        (e.g. madewithlau.com which uses Next.js + Sanity CMS tRPC state).
-    4. Basic HTML metadata (title, description, image) so the user can save the URL
+    4. Basic HTML metadata (title, description) so the user can save the URL
        and fill in ingredients/instructions manually.
     """
     async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
@@ -249,6 +237,7 @@ async def fetch_and_scrape(url: str) -> dict:
         "description": _safe(scraper.description),
         "ingredients": ingredients,
         "instructions": instructions,
-        "image_url": _safe(scraper.image),
+        # For copyright reasons, never scrape/store source-site images.
+        "image_url": None,
         "servings": _safe(scraper.yields),
     }

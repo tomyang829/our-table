@@ -72,6 +72,8 @@ async def extract_recipe(
     if needs_rescrape:
         try:
             data = await fetch_and_scrape(url)
+            # Never persist source-site images from scraped pages.
+            data["image_url"] = None
         except httpx.HTTPStatusError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

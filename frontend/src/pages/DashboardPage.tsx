@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useMyRecipes } from '@/hooks/useRecipes'
 import { useUser } from '@/hooks/useUser'
+import { DEFAULT_RECIPE_IMAGE_URL } from '@/constants/recipeImages'
 import type { UserRecipe } from '@/types'
 
 function RecipeCard({ recipe }: { recipe: UserRecipe }) {
-  const imageUrl = recipe.image_url ?? recipe.source_recipe?.image_url
+  const imageUrl = recipe.image_url ?? DEFAULT_RECIPE_IMAGE_URL
   const isEdited = recipe.deviates_from_source === true
 
   return (
@@ -13,11 +14,7 @@ function RecipeCard({ recipe }: { recipe: UserRecipe }) {
       to={`/recipes/${recipe.id}`}
       className="block overflow-hidden rounded-lg border transition-colors hover:bg-accent"
     >
-      {imageUrl ? (
-        <img src={imageUrl} alt="" className="h-40 w-full object-cover" />
-      ) : (
-        <div className="h-40 w-full bg-muted" />
-      )}
+      <img src={imageUrl} alt="" className="h-40 w-full object-cover" />
       <div className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-semibold">{recipe.title}</h3>
